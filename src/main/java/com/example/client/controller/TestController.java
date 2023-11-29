@@ -48,6 +48,11 @@ public class TestController {
 
     private JSONObject loginRes;
 
+    @RequestMapping("/testUpload")
+    public void testUpload(String s){
+        JSONObject response = JSONObject.parseObject(s);
+        System.out.println(response);
+    }
     @RequestMapping("/test")
     public void test(String s) throws IOException {
         JSONObject response = JSONObject.parseObject(s);
@@ -173,7 +178,7 @@ public class TestController {
 
     //上传新文件
     @RequestMapping("/uploadNew")
-    public int uploadNew(String projectName, String filePath,String description) throws IOException, InterruptedException, ParseException {
+    public JSONObject uploadNew(String projectName, String filePath,String description,String modelType) throws IOException, InterruptedException, ParseException {
         System.out.println(filePath);
         System.out.println(projectName);
 
@@ -251,16 +256,17 @@ public class TestController {
                 fileChangeService.updateModelId(Path.of(filePath), modelId);
             }
             fileChangeService.init(userId);
+            jsonResponse.put("config", ConfigUtil.getConfigDataByUserId(userId));
             System.out.println("上传成功");
-            return code;
+            return jsonResponse;
         } else if (code==211) {
             System.out.println("上传失败");
-            return code;
+            return jsonResponse;
         }else if(code==500401){
             System.out.println("上传失败：该项目中模型已存在");
-            return code;
+            return jsonResponse;
         }else{
-            return code;
+            return jsonResponse;
         }
     }
 

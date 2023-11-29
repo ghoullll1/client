@@ -86,6 +86,7 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
         Integer code = response.getInteger("code");
         //处理文件修改
         if (code == 4100) {
+            System.out.println("[Modify] response: " + response);
             String modelType = response.getJSONObject("data").getString("modelType");
             if (modelType.equals("Excel")) {
                 String modelId = response.getJSONObject("data").getString("modelId");
@@ -102,7 +103,7 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
                         System.out.println("修改成功");
                         Map<String,String> map=new HashMap<>();
                         map.put("code", "200");
-                        map.put("method", "responseModifyModeData");
+                        map.put("method", "responseModifyModelData");
                         map.put("modelId", modelId);
                         ObjectMapper objectMapper = new ObjectMapper();
                         String s = objectMapper.writeValueAsString(map);
@@ -112,7 +113,7 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
                         System.out.println("文件被打开");
                         Map<String,String> map=new HashMap<>();
                         map.put("code", "210");
-                        map.put("method", "responseModifyModeData");
+                        map.put("method", "responseModifyModelData");
                         map.put("modelId", modelId);
                         ObjectMapper objectMapper = new ObjectMapper();
                         String s = objectMapper.writeValueAsString(map);
@@ -122,7 +123,7 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
                         System.out.println("修改失败");;
                         Map<String,String> map=new HashMap<>();
                         map.put("code", "211");
-                        map.put("method", "responseModifyModeData");
+                        map.put("method", "responseModifyModelData");
                         map.put("modelId", modelId);
                         ObjectMapper objectMapper = new ObjectMapper();
                         String s = objectMapper.writeValueAsString(map);
