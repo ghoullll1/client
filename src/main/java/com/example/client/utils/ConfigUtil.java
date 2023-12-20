@@ -50,6 +50,28 @@ public class ConfigUtil {
         return null;
     }
 
+    //根据modelId获取config中的content
+    public static Content getContentByModelId(String modelId) throws IOException {
+        ConfigData configData = getConfigData();
+        ArrayList<String> fileType = configData.getFileType();
+        if (fileType.contains("excel")) {
+            XlsxData xlsx = configData.getExcel();
+            for (Content c : xlsx.getContent()) {
+                if (c.getModelId().equals(modelId)) {
+                    return c;
+                }
+            }
+        }else if (fileType.contains("txt")) {
+            TxtData txt = configData.getTxt();
+            for (Content c : txt.getContent()) {
+                if (c.getModelId().equals(modelId)) {
+                    return c;
+                }
+            }
+        }
+        return null;
+    }
+
     //添加新的content
     public static void addContent(Content content) throws IOException {
         String fileType = content.getFileType();

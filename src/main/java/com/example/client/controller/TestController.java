@@ -55,6 +55,7 @@ public class TestController {
     }
     @RequestMapping("/test")
     public void test(String s) throws IOException {
+        FileChangeService.setIsDown(true);
         JSONObject response = JSONObject.parseObject(s);
         System.out.println(response);
         String modelType = response.getJSONObject("data").getString("modelType");
@@ -79,6 +80,24 @@ public class TestController {
                     String s1 = objectMapper.writeValueAsString(map);
                     System.out.println(s1);
 //                        ctx.writeAndFlush(Unpooled.copiedBuffer(s, CharsetUtil.UTF_8));
+                    Map<String, Object> modifiedInfo = new HashMap<>();
+                    modifiedInfo.put("modelType", modelType);
+                    modifiedInfo.put("sheetName", sheetName);
+                    modifiedInfo.put("location", col+modefied.getString("row"));
+                    modifiedInfo.put("newValue", value);
+                    Content content = ConfigUtil.getContentByModelId(modelId);
+                    //更新文件修改时间
+                    fileChangeService.updateConfig(Path.of(content.getFilePath()));
+                    content = ConfigUtil.getContentByModelId(modelId);
+                    modifiedInfo.put("filePath", content.getFilePath());
+                    modifiedInfo.put("modifiedDate", content.getModifiedDate());
+                    modifiedInfo.put("modelName",content.getFileName());
+                    JSONObject jsonObject = new JSONObject();
+                    jsonObject.put("code","4100");
+                    jsonObject.put("modifiedInfo", modifiedInfo);
+                    jsonObject.put("config", ConfigUtil.getConfigDataByUserId(userId));
+                    System.out.println(jsonObject);
+                    NettyClientService.sendDataToElectron("localhost", 3000, String.valueOf(jsonObject));
                 }else if(isSuccess==-1){
                     System.out.println("文件被打开");
                     Map<String,String> map=new HashMap<>();
@@ -107,7 +126,7 @@ public class TestController {
 
     //上传覆盖文件
     @RequestMapping("/upload")
-    public int upload(String filePath,String cover,String description) throws IOException, InterruptedException {
+    public JSONObject upload(String filePath,String cover,String description) throws IOException, InterruptedException {
         File file = new File(filePath);
         ExcelUtil excelUtil = new ExcelUtil();
         excelUtil.setFile(file);
@@ -164,15 +183,16 @@ public class TestController {
             fileChangeService.updateConfig(Path.of(filePath));//更新文件修改时间
             fileChangeService.updateDescription(Path.of(filePath),description);
             System.out.println("上传成功");
-            return code;
+            jsonResponse.put("config", ConfigUtil.getConfigDataByUserId(userId));
+            return jsonResponse;
         } else if (code==211) {
             System.out.println("上传失败");
-            return code;
+            return jsonResponse;
         }else if(code==500401){
             System.out.println("上传失败：该项目中模型已存在");
-            return code;
+            return jsonResponse;
         }else{
-            return code;
+            return jsonResponse;
         }
     }
 

@@ -69,7 +69,7 @@ public class NettyClientService {
     }
 
     //发送Data到Electron中
-    public void sendDataToElectron(String host, int port, String requestData) {
+    public static void sendDataToElectron(String host, int port, String requestData) {
         EventLoopGroup group = new NioEventLoopGroup();
 
         try {
