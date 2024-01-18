@@ -7,6 +7,10 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.DelimiterBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
+import io.netty.handler.codec.json.JsonObjectDecoder;
 import io.netty.handler.codec.string.StringDecoder;
 import io.netty.handler.codec.string.StringEncoder;
 import io.netty.handler.timeout.IdleStateHandler;
@@ -30,12 +34,13 @@ public class NettyClientService {
     private CountDownLatch initLatch = new CountDownLatch(1);
     private NettyClientHandler nettyClientHandler;
 
-//    @PostConstruct
-    public void  init() throws InterruptedException {
+    //    @PostConstruct
+    public void init() throws InterruptedException {
         EventLoopGroup group = new NioEventLoopGroup();
         nettyClientHandler = new NettyClientHandler();
 
         Bootstrap bootstrap = new Bootstrap()
+                .option(ChannelOption.SO_RCVBUF, 65536)
                 .group(group)
                 .channel(NioSocketChannel.class)
                 .handler(new ChannelInitializer<SocketChannel>() {
@@ -43,24 +48,35 @@ public class NettyClientService {
                     protected void initChannel(SocketChannel ch) throws Exception {
                         ChannelPipeline pipeline = ch.pipeline();
                         // 添加处理器和处理逻辑
-                        pipeline.addLast(new IdleStateHandler(0, 1, 0, TimeUnit.SECONDS));
-                        pipeline.addLast("handler", nettyClientHandler);
+                        pipeline.addLast(new IdleStateHandler(0, 4, 0, TimeUnit.SECONDS));
+                        /**
+                         * maxFrameLength: 解码的帧的最大长度，超过此长度的帧将被丢弃。
+                         * lengthFieldOffset: 长度字段在帧中的偏移量，表示长度字段的起始位置。
+                         * lengthFieldLength: 长度字段的长度，通常为 2、4、8 等字节。
+                         * lengthAdjustment: 长度字段的值与帧的实际长度之间的偏差值。
+                         * initialBytesToStrip: 解码后，从帧中跳过的字节数。
+                         */
+//                        pipeline.addLast(new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 8, 0, 8))
+                        pipeline.addLast(new StringEncoder()) // 发送字符串编码器
+                                .addLast(new JsonObjectDecoder()) // JSON对象解码器
+                                .addLast("handler", nettyClientHandler);
                     }
                 });
-        Runnable task=()->{
+        Runnable task = () -> {
             try {
                 ChannelFuture channelFuture = bootstrap.connect(host, port).sync();
                 initLatch.countDown(); // 减少 latch 计数
                 channelFuture.channel().closeFuture().sync();
-            } catch (Exception ex){
+            } catch (Exception ex) {
                 throw new RuntimeException(ex);
-            }finally {
+            } finally {
                 group.shutdownGracefully();
             }
         };
-        Thread thread=new Thread(task);
+        Thread thread = new Thread(task);
         thread.start();
     }
+
     //向服务端发起请求
     public void sendRequest(String requestData) throws InterruptedException {
         initLatch.await(); // 等待 init 方法中的线程完成

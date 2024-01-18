@@ -73,7 +73,7 @@ public class ExcelUtil {
     }
 
     //将file文件转换为json对象
-    public JSONObject toJsonObj() throws IOException {
+    public static JSONObject toJsonObj(File file) throws IOException {
         InputStream inputStream = new FileInputStream(file);
         Workbook workbook = new XSSFWorkbook(inputStream);
         JSONObject result = new JSONObject();

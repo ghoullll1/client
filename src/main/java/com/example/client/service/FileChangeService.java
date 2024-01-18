@@ -3,7 +3,6 @@ package com.example.client.service;
 import com.example.client.entity.ConfigData;
 import com.example.client.entity.Content;
 import com.example.client.utils.ConfigUtil;
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -11,9 +10,9 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
@@ -26,13 +25,13 @@ import java.util.Map;
 
 @Service
 public class FileChangeService {
-
-    @Value("${config.file.path}") // 从配置文件中获取JSON文件的路径
+    // 从配置文件中获取JSON文件的路径
+    @Value("${config.file.path}")
     private String jsonFilePath;
     private WatchService watchService;
     private Map<WatchKey, Path> keyToPathMap;
     private ArrayList<Path> fileList;
-    private final NettyClientService nettyClient;
+//    private final NettyClientService nettyClient;
     private ConfigData configData;
 
     //记录被修改的文件,只保留最新的修改记录,key为文件名,value为文件最后一次修改时间
@@ -40,14 +39,15 @@ public class FileChangeService {
     //记录被删除的文件,只保留最新的删除记录,key为文件名,value为文件删除时间
     private Map<String, String> deleteMap;
     private String userId;
+    private static boolean isDown = false;
+    private static final Object lock = new Object(); // 创建一个对象作为锁
 
-    public FileChangeService(NettyClientService nettyClient) {
-        this.nettyClient = nettyClient;
+    public FileChangeService() {
     }
 
     //初始化文件修改监听服务
-//    @PostConstruct
     public void init(String userId) throws IOException, ParseException, InterruptedException {
+//        jsonFilePath=this.getClass().getResource("/config.json").getPath();
         this.userId = userId;
         // 初始化 keyToPathMap
         keyToPathMap = new HashMap<>();
@@ -61,10 +61,12 @@ public class FileChangeService {
         deleteMap = new HashMap<>();
 
         // 获取JSON文件的路径
-        File configFile = new File(jsonFilePath);
+//        File configFile = new File(jsonFilePath);
+        InputStream inputStream = FileChangeService.class.getClassLoader().getResourceAsStream("config.json");
         ObjectMapper objectMapper = new ObjectMapper();
         //将json文件转换成java实例
-        configData = objectMapper.readValue(configFile, ConfigData.class);
+//        configData = objectMapper.readValue(configFile, ConfigData.class);
+        configData = objectMapper.readValue(inputStream, ConfigData.class);
 
         //配置文件中包含excel文件
         if (configData.getFileType().contains("excel")) {
@@ -92,7 +94,8 @@ public class FileChangeService {
                             map.put("uploadStatus", "等待上传");
                             modifyMap.put(String.valueOf(path), map);
                             System.out.println("initMap" + modifyMap);
-                            nettyClient.sendDataToElectron("localhost", 3000, mapper.writeValueAsString(modifyMap));
+//                            nettyClient.sendDataToElectron("localhost", 3000, mapper.writeValueAsString(modifyMap));
+                            NettyClientService.sendDataToElectron("localhost", 3000, mapper.writeValueAsString(modifyMap));
                         } //date比modifiedDate晚,说明配置文件出错
                         else if (i == 1) {
                             System.out.println("配置文件出错了");
@@ -178,9 +181,21 @@ public class FileChangeService {
                                 try {
                                     modifyMap.put(fullPath.toString(), map);
                                     String s = mapper.writeValueAsString(modifyMap);
-//                                    updateConfig(fullPath);
-                                    nettyClient.sendDataToElectron("localhost", 3000, s);
+//                                    Thread.sleep(100);
+//                                    Date modifiedDate = getModifiedDate(fullPath);
+//                                    // 格式化修改时间
+//                                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy年M月d日,HH:mm:ss");
+//                                    String lastModifiedDate = ConfigUtil.getContentByFilePath(fullPath.toString()).getModifiedDate();
+//                                    Date date = sdf.parse(lastModifiedDate);//上次修改时间
+//                                    int i = compareDate(date, modifiedDate);
+//                                    System.out.println("i"+i);
+                                    System.out.println(isDown);
+                                    if(!isDown) {
+                                        NettyClientService.sendDataToElectron("localhost", 3000, s);
+                                    }
                                 } catch (JsonProcessingException e) {
+                                    throw new RuntimeException(e);
+                                }  catch (IOException e) {
                                     throw new RuntimeException(e);
                                 }
                             }
@@ -194,14 +209,13 @@ public class FileChangeService {
                                     // 处理删除的文件
                                     System.out.println("fullPath" + fullPath);
                                     System.out.println("File deleted: " + deletedFile);
-                                    // 在这里执行删除文件的操作，如通知 Electron 或其他处理
+                                    // 在这里执行删除文件的操作，通知 Electron 或其他处理
                                 } else {
                                     // 文件存在，可能是被修改
                                 }
 
                             }
                         }
-
                     }
                 }
                 key.reset(); // 重置 WatchKey，以便继续监听
@@ -209,9 +223,11 @@ public class FileChangeService {
         }).start();
     }
 
-    //文件发生修改后修改配置文件
+    //修改配置文件中的文件修改时间
     public void updateConfig(Path fullPath) {
         ArrayList<Content> xlsxList = configData.getExcel().getContent();
+        System.out.println(fullPath);
+        System.out.println(xlsxList);
         for (Content content : xlsxList) {
             if (content.getFilePath().equals(fullPath.toString())) {
                 try {
@@ -238,7 +254,7 @@ public class FileChangeService {
     }
 
     //更新模型描述
-    public void updateDescription(Path fullPath,String description){
+    public void updateDescription(Path fullPath, String description) {
         ArrayList<Content> xlsxList = configData.getExcel().getContent();
         for (Content content : xlsxList) {
             if (content.getFilePath().equals(fullPath.toString())) {
@@ -272,6 +288,10 @@ public class FileChangeService {
 
     //更新文件上传时间
     public void updateUploadDate(Path fullPath) throws IOException {
+        InputStream inputStream = FileChangeService.class.getClassLoader().getResourceAsStream("config.json");
+        ObjectMapper mapper = new ObjectMapper();
+        configData = mapper.readValue(inputStream, ConfigData.class);
+
         ArrayList<Content> xlsxList = configData.getExcel().getContent();
         for (Content content : xlsxList) {
             if (content.getFilePath().equals(fullPath.toString())) {
@@ -313,5 +333,11 @@ public class FileChangeService {
         //删除通知
         modifyMap.remove(path);
         System.out.println(modifyMap);
+    }
+
+    public static void setIsDown(boolean isDown) {
+        synchronized (lock) {
+            FileChangeService.isDown = isDown;
+        }
     }
 }

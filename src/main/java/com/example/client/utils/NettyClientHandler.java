@@ -3,6 +3,9 @@ package com.example.client.utils;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.example.client.entity.Content;
+import com.example.client.service.FileChangeService;
+import com.example.client.service.NettyClientService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.buffer.ByteBuf;
@@ -11,6 +14,14 @@ import io.netty.channel.*;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.CharsetUtil;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import javax.annotation.PostConstruct;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -18,6 +29,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+@Component
 public class NettyClientHandler extends ChannelInboundHandlerAdapter {
 
     private ChannelHandlerContext ctx; // 保存通道上下文，以便后续使用
@@ -32,13 +44,31 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
     private BlockingQueue<String> responseQueue = new ArrayBlockingQueue<>(10); // 队列用于存储响应
     // 客户端请求的心跳命令
     private static final ByteBuf HEARTBEAT_SEQUENCE = Unpooled.unreleasableBuffer(Unpooled.copiedBuffer("hb_request", CharsetUtil.UTF_8));
+    private static final String HEART_BEAT_REPONSE = "hb_reponse";
     private int fcount = 1;  // 心跳循环次数
     private String requestData;
     private String userID;
 
     private int messageCount = 0;
 
-    private CountDownLatch ctxLatch=new CountDownLatch(1);
+    private CountDownLatch ctxLatch = new CountDownLatch(1);
+
+    public static NettyClientHandler nettyClientHandler;
+
+    @PostConstruct
+    private void init() {
+        nettyClientHandler = this;
+        nettyClientHandler.fileChangeService = this.fileChangeService;
+    }
+
+    @Autowired
+    private  FileChangeService fileChangeService;
+
+
+
+    ArrayList<Map<String,Object>> modifiedList;
+
+
 
     public NettyClientHandler() {
     }
@@ -76,63 +106,92 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
 
     //通道响应内容读取
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws InterruptedException, JsonProcessingException {
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws InterruptedException, IOException {
         // 处理从服务器接收到的响应数据
         if (msg instanceof ByteBuf) {
             ByteBuf byteBuf = (ByteBuf) msg;
+            System.out.println(byteBuf.readableBytes());
             this.response = byteBuf.toString(io.netty.util.CharsetUtil.UTF_8);
         }
         JSONObject response = JSONObject.parseObject(this.response);
         Integer code = response.getInteger("code");
-        //处理文件修改
-        if (code == 4100) {
-            System.out.println("[Modify] response: " + response);
-            String modelType = response.getJSONObject("data").getString("modelType");
-            if (modelType.equals("Excel")) {
-                String modelId = response.getJSONObject("data").getString("modelId");
-                JSONArray modefiedList = response.getJSONObject("data").getJSONArray("modefiedList");
-                for (int i = 0; i < modefiedList.size(); i++) {
-                    JSONObject modefied = modefiedList.getJSONObject(i);
-                    String sheetName = modefied.getString("sheetName");
-                    String value = modefied.getString("value");
-                    String col = modefied.getString("col");
-                    int row = Integer.parseInt(modefied.getString("row"));
-                    int isSuccess = ExcelUtil.updateExcel(modelId, sheetName, row, col, value);
-                    System.out.println(isSuccess);
-                    if (isSuccess==1) {
-                        System.out.println("修改成功");
-                        Map<String,String> map=new HashMap<>();
-                        map.put("code", "200");
-                        map.put("method", "responseModifyModelData");
-                        map.put("modelId", modelId);
-                        ObjectMapper objectMapper = new ObjectMapper();
-                        String s = objectMapper.writeValueAsString(map);
-                        System.out.println(s);
-                        ctx.writeAndFlush(Unpooled.copiedBuffer(s, CharsetUtil.UTF_8));
-                    }else if(isSuccess==-1){
-                        System.out.println("文件被打开");
-                        Map<String,String> map=new HashMap<>();
-                        map.put("code", "210");
-                        map.put("method", "responseModifyModelData");
-                        map.put("modelId", modelId);
-                        ObjectMapper objectMapper = new ObjectMapper();
-                        String s = objectMapper.writeValueAsString(map);
-                        System.out.println(s);
-                        ctx.writeAndFlush(Unpooled.copiedBuffer(s, CharsetUtil.UTF_8));
-                    }else{
-                        System.out.println("修改失败");;
-                        Map<String,String> map=new HashMap<>();
-                        map.put("code", "211");
-                        map.put("method", "responseModifyModelData");
-                        map.put("modelId", modelId);
-                        ObjectMapper objectMapper = new ObjectMapper();
-                        String s = objectMapper.writeValueAsString(map);
-                        System.out.println(s);
-                        ctx.writeAndFlush(Unpooled.copiedBuffer(s, CharsetUtil.UTF_8));
-                    }
-                }
-            }
+        if(code==200){
+            userID=response.getJSONObject("data").getString("user_id");
         }
+        //处理文件修改
+//        if (code == 4100) {
+//            FileChangeService.setIsDown(true);
+//            System.out.println("[Modify] response: " + response);
+//            String modelType = response.getJSONObject("data").getString("modelType");
+//            if (modelType.equals("Excel")) {
+//                String modelId = response.getJSONObject("data").getString("modelId");
+//                JSONArray modefiedList = response.getJSONObject("data").getJSONArray("modefiedList");
+//                for (int i = 0; i < modefiedList.size(); i++) {
+//                    JSONObject modefied = modefiedList.getJSONObject(i);
+//                    String sheetName = modefied.getString("sheetName");
+//                    String value = modefied.getString("value");
+//                    String col = modefied.getString("col");
+//                    int row = Integer.parseInt(modefied.getString("row"));
+//                    int isSuccess = ExcelUtil.updateExcel(modelId, sheetName, row, col, value);
+//                    System.out.println(isSuccess);
+//                    if (isSuccess == 1) {
+//                        System.out.println("修改成功");
+//                        Map<String, String> map = new HashMap<>();
+//                        map.put("code", "200");
+//                        map.put("method", "responseModifyModelData");
+//                        map.put("modelId", modelId);
+//                        ObjectMapper objectMapper = new ObjectMapper();
+//                        String s = objectMapper.writeValueAsString(map);
+//                        System.out.println(s);
+//                        ctx.writeAndFlush(Unpooled.copiedBuffer(s, CharsetUtil.UTF_8));
+//                        Map<String, Object> modifiedInfo = new HashMap<>();
+//                        modifiedInfo.put("modelType", modelType);
+//                        modifiedInfo.put("sheetName", sheetName);
+//                        modifiedInfo.put("location", col+modefied.getString("row"));
+//                        modifiedInfo.put("newValue", value);
+//                        Content content = ConfigUtil.getContentByModelId(modelId);
+//                        //更新文件修改时间
+//                        System.out.println(nettyClientHandler.fileChangeService);
+//                        nettyClientHandler.fileChangeService.updateConfig(Path.of(content.getFilePath()));
+//                        FileChangeService.setIsDown(false);
+//                        content = ConfigUtil.getContentByModelId(modelId);
+//                        modifiedInfo.put("filePath", content.getFilePath());
+//                        modifiedInfo.put("modifiedDate", content.getModifiedDate());
+//                        modifiedInfo.put("modelName",content.getFileName());
+//                        JSONObject jsonObject = new JSONObject();
+//                        jsonObject.put("code","4100");
+//                        jsonObject.put("modifiedInfo", modifiedInfo);
+//                        jsonObject.put("config", ConfigUtil.getConfigDataByUserId(userID));
+//                        System.out.println(jsonObject);
+//                        NettyClientService.sendDataToElectron("localhost", 3000, String.valueOf(jsonObject));
+//                    } else if (isSuccess == -1) {
+//                        System.out.println("文件被打开");
+//                        Map<String, String> map = new HashMap<>();
+//                        map.put("code", "210");
+//                        map.put("method", "responseModifyModelData");
+//                        map.put("modelId", modelId);
+//                        ObjectMapper objectMapper = new ObjectMapper();
+//                        String s = objectMapper.writeValueAsString(map);
+//                        System.out.println(s);
+//                        FileChangeService.setIsDown(false);
+//                        ctx.writeAndFlush(Unpooled.copiedBuffer(s, CharsetUtil.UTF_8));
+//                    } else {
+//                        System.out.println("修改失败");
+//                        ;
+//                        Map<String, String> map = new HashMap<>();
+//                        map.put("code", "211");
+//                        map.put("method", "responseModifyModelData");
+//                        map.put("modelId", modelId);
+//                        ObjectMapper objectMapper = new ObjectMapper();
+//                        String s = objectMapper.writeValueAsString(map);
+//                        FileChangeService.setIsDown(false);
+//                        System.out.println(s);
+//                        ctx.writeAndFlush(Unpooled.copiedBuffer(s, CharsetUtil.UTF_8));
+//                    }
+//                }
+//
+//            }
+//        }
         if (latch.getCount() > 0) {
             latch.countDown();  // 收到服务器的消息的时候，将计数器减1
         }
@@ -172,9 +231,14 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
         ctx.writeAndFlush(Unpooled.copiedBuffer(requestData, CharsetUtil.UTF_8));
     }
 
-    public void waitForResponse() throws InterruptedException {
+    public void waitForResponse() {
         // 在等待回应的操作中，调用await方法进行等待，直到计数器为0，即可收到服务端的回应
-        boolean success = latch.await(10, TimeUnit.SECONDS);
+        boolean success = false;
+        try {
+            success = latch.await(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         if (!success) {
             System.out.println("丢失了服务器的返回的一条消息！！！ \n");
             response = "";
@@ -192,4 +256,6 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
     public String getResponse() {
         return response;
     }
+
+
 }

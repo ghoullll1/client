@@ -109,8 +109,8 @@ public class TestController {
     @RequestMapping("/upload")
     public int upload(String filePath,String cover,String description) throws IOException, InterruptedException {
         File file = new File(filePath);
-        ExcelUtil excelUtil = new ExcelUtil();
-        excelUtil.setFile(file);
+//        ExcelUtil excelUtil = new ExcelUtil();
+//        excelUtil.setFile(file);
         Content c = ConfigUtil.getContentByFilePath(filePath);
         JSONObject data = loginRes.getJSONObject("data");
         JSONArray projects=data.getJSONArray("projects");
@@ -138,7 +138,7 @@ public class TestController {
         uploadData.setDescription(description);
         uploadData.setModel_type("Excel");
 
-        JSONObject jsonObj = excelUtil.toJsonObj();
+        JSONObject jsonObj = ExcelUtil.toJsonObj(file);
         uploadData.setModel_data(jsonObj);
         String jsonString = JSON.toJSONString(uploadData, SerializerFeature.PrettyFormat, SerializerFeature.WriteMapNullValue,
                 SerializerFeature.WriteDateUseDateFormat, SerializerFeature.WriteNullListAsEmpty);
@@ -150,11 +150,11 @@ public class TestController {
         //等待netty的response,并根据返回的code处理
         NettyClientHandler nettyClientHandler = nettyClientService.getNettyClientHandler();
         nettyClientHandler.sendMessage();
-        try {
+//        try {
             nettyClientHandler.waitForResponse();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        }
         String response = nettyClientHandler.getResponse();
         System.out.println("[upload response]: " + response);
         JSONObject jsonResponse = JSONObject.parseObject(response);
@@ -185,8 +185,8 @@ public class TestController {
         File file = new File(filePath);
         String fileName=file.getName().substring(0, file.getName().lastIndexOf("."));
         String fileType=file.getName().substring(file.getName().lastIndexOf(".")+1);
-        ExcelUtil excelUtil = new ExcelUtil();
-        excelUtil.setFile(file);
+//        ExcelUtil excelUtil = new ExcelUtil();
+//        excelUtil.setFile(file);
 
         JSONObject data = loginRes.getJSONObject("data");
         JSONArray projects = data.getJSONArray("projects");
@@ -210,7 +210,7 @@ public class TestController {
         uploadData.setCover(true);//改为true和false,有modelId时,true为覆盖,false创建新版本,没有modelId时,都是添加新模型
         uploadData.setModel_name(file.getName().substring(0, file.getName().lastIndexOf('.')));
         uploadData.setProject_id(project_id);
-        JSONObject jsonObj = excelUtil.toJsonObj();
+        JSONObject jsonObj = ExcelUtil.toJsonObj(file);
         uploadData.setModel_data(jsonObj);
         uploadData.setDescription(description);
         String jsonString = JSON.toJSONString(uploadData, SerializerFeature.PrettyFormat, SerializerFeature.WriteMapNullValue,
@@ -223,11 +223,11 @@ public class TestController {
         //等待netty的response,并根据返回的code处理
         NettyClientHandler nettyClientHandler = nettyClientService.getNettyClientHandler();
         nettyClientHandler.sendMessage();
-        try {
+//        try {
             nettyClientHandler.waitForResponse();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        }
         String response = nettyClientHandler.getResponse();
         System.out.println("[upload response]: " + response);
         JSONObject jsonResponse = JSONObject.parseObject(response);
@@ -255,7 +255,7 @@ public class TestController {
                 ConfigUtil.addContent(content);
                 fileChangeService.updateModelId(Path.of(filePath), modelId);
             }
-            fileChangeService.init(userId);
+//            fileChangeService.init(userId);
             jsonResponse.put("config", ConfigUtil.getConfigDataByUserId(userId));
             System.out.println("上传成功");
             return jsonResponse;
@@ -315,12 +315,12 @@ public class TestController {
                 throw new RuntimeException(e);
             }
             NettyClientHandler nettyClientHandler = nettyClientService.getNettyClientHandler();
-            try {
+//            try {
                 nettyClientHandler.waitForResponse();
-            } catch (InterruptedException e) {
-                nettyClientService.getNettyClientHandler().close();
-                throw new RuntimeException(e);
-            }
+//            } catch (InterruptedException e) {
+//                nettyClientService.getNettyClientHandler().close();
+//                throw new RuntimeException(e);
+//            }
             String response = nettyClientHandler.getResponse();
             System.out.println("[login response]: " + response);
             JSONObject jsonResponse = JSONObject.parseObject(nettyClientHandler.getResponse());
@@ -332,11 +332,11 @@ public class TestController {
                 jsonResponse.put("config",config);
                 System.out.println(jsonResponse);
                 System.out.println(userId);
-                try {
-                    fileChangeService.init(userId);
-                } catch (IOException | ParseException | InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
+//                try {
+//                    fileChangeService.init(userId);
+//                } catch (IOException | ParseException | InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
             }
             if (code == 400001) {
                 nettyClientService.getNettyClientHandler().close();
